@@ -55,6 +55,9 @@ type GetOptions struct {
 	TemplateRootPath  string
 	EnableCustomTable bool
 
+	Timeout     int
+	Concurrency int
+
 	factory cmdutil.Factory
 	args    []string
 }
@@ -145,6 +148,10 @@ func (o *GetOptions) Run(cmd *cobra.Command, args []string) error {
 	}
 	if err := o.Validate(); err != nil {
 		return err
+	}
+
+	if len(o.args) > 0 && o.args[0] == "all-resources" {
+		return o.listAllResources()
 	}
 
 	if o.Watch || o.WatchOnly {
@@ -371,6 +378,8 @@ in <root>/<kind>-<group>-<version>/<template>.yaml (falling back to .tpl).`,
 	cmd.Flags().StringVarP(&o.Namespace, "namespace", "n", "", "If present, the namespace scope for this CLI request.")
 	cmd.Flags().StringVar(&o.Context, "context", "", "The name of the kubeconfig context to use.")
 	cmd.Flags().BoolVar(&o.EnableCustomTable, "ctable", false, "Enable custom table output with borders.")
+	cmd.Flags().IntVar(&o.Timeout, "timeout", 30, "Timeout in seconds for listing all resources (used with all-resources).")
+	cmd.Flags().IntVar(&o.Concurrency, "concurrency", 10, "Max parallel API requests when listing all resources.")
 	return cmd
 }
 
