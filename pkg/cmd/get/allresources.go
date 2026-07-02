@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/kubectl-cwide/pkg/utils"
-	"golang.org/x/sync/errgroup"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/printers"
@@ -96,16 +95,25 @@ func (o *GetOptions) listAllResources() error {
 	defer cancel()
 
 	var mu sync.Mutex
+	var wg sync.WaitGroup
 	var results []resourceResult
-
-	g, ctx := errgroup.WithContext(ctx)
-	g.SetLimit(o.Concurrency)
+	sem := make(chan struct{}, o.Concurrency)
 
 	for _, t := range targets {
 		t := t
-		g.Go(func() error {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			select {
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+			case <-ctx.Done():
+				return
+			}
+
 			if ctx.Err() != nil {
-				return nil
+				return
 			}
 
 			var resourceArg string
@@ -128,18 +136,22 @@ func (o *GetOptions) listAllResources() error {
 				Do()
 
 			if err := r.Err(); err != nil {
-				fmt.Fprintf(o.ErrOut, "Warning: failed to list %s: %v\n", resourceArg, err)
-				return nil
+				if o.ShowWarnings {
+					fmt.Fprintf(o.ErrOut, "Warning: failed to list %s: %v\n", resourceArg, err)
+				}
+				return
 			}
 
 			infos, err := r.Infos()
 			if err != nil {
-				fmt.Fprintf(o.ErrOut, "Warning: failed to list %s: %v\n", resourceArg, err)
-				return nil
+				if o.ShowWarnings {
+					fmt.Fprintf(o.ErrOut, "Warning: failed to list %s: %v\n", resourceArg, err)
+				}
+				return
 			}
 
 			if len(infos) == 0 {
-				return nil
+				return
 			}
 
 			mu.Lock()
@@ -151,13 +163,10 @@ func (o *GetOptions) listAllResources() error {
 				Infos:      infos,
 			})
 			mu.Unlock()
-			return nil
-		})
+		}()
 	}
 
-	if err := g.Wait(); err != nil {
-		return fmt.Errorf("error listing resources: %w", err)
-	}
+	wg.Wait()
 
 	if ctx.Err() == context.DeadlineExceeded {
 		fmt.Fprintf(o.ErrOut, "Warning: timeout reached (%ds), some resources may not be listed\n", o.Timeout)

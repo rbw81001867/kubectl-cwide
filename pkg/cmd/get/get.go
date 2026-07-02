@@ -55,8 +55,9 @@ type GetOptions struct {
 	TemplateRootPath  string
 	EnableCustomTable bool
 
-	Timeout     int
-	Concurrency int
+	Timeout      int
+	Concurrency  int
+	ShowWarnings bool
 
 	factory cmdutil.Factory
 	args    []string
@@ -380,6 +381,7 @@ in <root>/<kind>-<group>-<version>/<template>.yaml (falling back to .tpl).`,
 	cmd.Flags().BoolVar(&o.EnableCustomTable, "ctable", false, "Enable custom table output with borders.")
 	cmd.Flags().IntVar(&o.Timeout, "timeout", 30, "Timeout in seconds for listing all resources (used with all-resources).")
 	cmd.Flags().IntVar(&o.Concurrency, "concurrency", 10, "Max parallel API requests when listing all resources.")
+	cmd.Flags().BoolVar(&o.ShowWarnings, "show-warnings", false, "Show warnings for resources that failed to list (e.g., RBAC denied).")
 	return cmd
 }
 
